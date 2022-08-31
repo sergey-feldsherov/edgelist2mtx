@@ -1,5 +1,5 @@
 CFLAGS= -g -O3 -W -Wall -Wunused -Wcast-align -pedantic -pedantic-errors -fstack-protector-all -Wfloat-equal -Wpointer-arith
-CC = gcc $(CFLAGS)
+CC = gcc -std=c11 $(CFLAGS)
 
 
 all: edglst2mtx
