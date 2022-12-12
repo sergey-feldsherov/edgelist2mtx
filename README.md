@@ -4,6 +4,7 @@ edgelist to mtx graph converting tool
 
 ## todo
 
+* check for indices being 1-based
 * sparsity test and warning?
 * progress bar? (with file size check?)
 * think about ID range wholeness check
