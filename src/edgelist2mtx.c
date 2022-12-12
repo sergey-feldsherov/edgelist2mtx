@@ -48,6 +48,8 @@ char inferformat(FILE* fd, char strict, char *weightedp, unsigned long long *edg
 		*linecntp += 1;
 		if(line[0] == '%' || line[0] == '#') {
 			continue;
+		} else {
+			break;
 		}
 	}
 
@@ -56,9 +58,11 @@ char inferformat(FILE* fd, char strict, char *weightedp, unsigned long long *edg
 			fprintf(stderr, "Line %llu could not be parsed\n", *linecntp);
 			return 1;
 		} else {
+			printf("Inferring weighted format from line %llu\n", *linecntp);
 			*weightedp = 1;
 		}
 	} else {
+		printf("Inferring unweighted format from line %llu\n", *linecntp);
 		*weightedp = 0;
 	}
 
@@ -232,11 +236,11 @@ int main(int argc, char **argv) {
 	char weighted;
 	char r = inferformat(fd, strictcheck, &weighted, &edgecnt, &linecnt, &maxid);
 	if(r != 0) {
-		fprintf(stderr, "Unable to infer input file format, terminating\n");
+		fprintf(stderr, "Input file parse error, terminating\n");
 		return 1;
 	}
 
-	printf("Lines: %llu\nMaximal vertex id: %llu\nEdges: %llu\n");
+	printf("Input file parsed\n\tLines: %llu\n\tMaximal vertex id: %llu\n\tEdges: %llu\n", linecnt, maxid, edgecnt);
 
 	unsigned long long *fromp, *top;
 	double *weightp = NULL;
