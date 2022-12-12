@@ -1,99 +1,280 @@
-#define _GNU_SOURCE
-
 #include <stdio.h>
-#include <inttypes.h>
-#include <argp.h>
+#include <stdlib.h>
+#include <assert.h>
 
-char* inputFile = "./input/input.txt";
-char* outputFile = "./output/output.txt";
+#include "arg.h"
 
-static int parse_opt(int key, char *arg, struct argp_state *state);
 
-int main(int argc, char **argv) {
+char *argv0;
 
-	struct argp_option options[] = {
-		{  "input", 'i', "FILE", 0,  "path to input file" },
-		{ "output", 'o', "FILE", 0, "path to output file" },
-		{ 0 }
-	};
-	struct argp argp = {options, parse_opt, 0, 0};
-	argp_parse(&argp, argc, argv, 0, 0, 0);
+char *inname;
+char *outname;
+char strictcheck = 0;
+char forceundir = 0;
+char forceweight = 0;
 
-	FILE *input = fopen(inputFile, "r");
-	if(input == NULL) {
-		printf("Unable to open input file \"%s\"\n", inputFile);
-		return 1;
+
+void printusage(void);
+char inferformat(FILE *fd, char strict, char *weightedp, unsigned long long *edgecntp, unsigned long long *linecntp, unsigned long long *maxidp);
+void readweighted(FILE* fd, unsigned long long *fromp, unsigned long long *top, double *weightp);
+void readunweighted(FILE* fd, unsigned long long *fromp, unsigned long long *top);
+void wtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top, double *weightp);
+void unwtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top);
+void unwtounwmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top);
+void writeheader(FILE* fd, char weighted, char undirected);
+
+
+void printusage(void) {
+	printf("Usage: edgelist2mtx [-s] [-uw] INPUT OUTPUT\n");
+}
+
+/* Returns 0 if file was parsed successfully, 1 otherwise.
+ * *weighted will be equal to 1 if * the inferred format
+ * is weighted or 0 otherwise. *edgecnt will store number
+ * of non-comment lines, *linecnt will store total number of lines,
+ * *maxid will store maximal vertex ID found in file.
+ */
+char inferformat(FILE* fd, char strict, char *weightedp, unsigned long long *edgecntp, unsigned long long *linecntp, unsigned long long *maxidp) {
+	char *line = NULL;
+	size_t len = 0;
+	unsigned long long u, v, maxlocal = 0;
+	double w;
+	
+	*edgecntp = 0;
+	*linecntp = 0;
+	*maxidp = 0;
+
+	while(getline(&line, &len, fd) != -1) {
+		*linecntp += 1;
+		if(line[0] == '%' || line[0] == '#') {
+			continue;
+		}
 	}
 
-	char* line = NULL;
-	unsigned long long maxID = 0;
-	unsigned long v0 = 0;
-	unsigned long v1 = 0;
-	unsigned long long edgeCount = 0;
-	size_t len = 0;
-	while(getline(&line, &len, input) != -1) {
-		if(line[0] == '#' || line [0] == '%') {
-			printf("Encountered a commented line\n");
+	if(sscanf(line, "%llu %llu %lf\n", &u, &v, &w) != 3) {
+		if(sscanf(line, "%llu %llu\n", &u, &v) != 2) {
+			fprintf(stderr, "Line %llu could not be parsed\n", *linecntp);
+			return 1;
 		} else {
-			if(sscanf(line, "%" SCNu64 " %" SCNu64, &v0, &v1) == 2) {
-				edgeCount++;
+			*weightedp = 1;
+		}
+	} else {
+		*weightedp = 0;
+	}
 
-				if(v0 > v1) {
-					if(v0 > maxID) {
-						maxID = v0;
-					}
+	unsigned long long infline = *linecntp;
+	while(getline(&line, &len, fd) != -1) {
+		*linecntp += 1;
+		if(line[0] == '%' || line[0] == '#') {
+			if(strict) {
+				fprintf(stderr, "Commentary line (%llu) after first non-comentary line (%llu)\n", *linecntp, infline);
+				return 1;
+			} else {
+				continue;
+			}
+		} else {
+			if(*weightedp) {
+				if(sscanf(line, "%llu %llu %lf\n", &u, &v, &w) != 3) {
+					fprintf(stderr, "Line %llu could not be parsed as weighted (inferred from line %llu)\n", *linecntp, infline);
+					return 1;
 				} else {
-					if(v1 > maxID) {
-						maxID = v1;
+					maxlocal = u > v? u : v;
+					if(maxlocal > *maxidp) {
+						*maxidp = maxlocal;
 					}
 				}
 			} else {
-				printf("Invalid line: \"%s\"\n", line);
+				if(sscanf(line, "%llu %llu\n", &u, &v) != 2) {
+					fprintf(stderr, "Line %llu could not be parsed as unweighted (inferred from line %llu)\n", *linecntp, infline);
+					return 1;
+				} else {
+					maxlocal = u > v ? u : v;
+					if(maxlocal > *maxidp) {
+						*maxidp = maxlocal;
+					}
+				}
 			}
+			*edgecntp += 1;
 		}
 	}
-
-	printf("Maximal vertex ID: %llu\n", maxID);
-	printf("Edge count: %llu\n", edgeCount);
-
-	rewind(input);
-
-	FILE *output = fopen(outputFile, "w");
-	if(output == NULL) {
-		printf("Unable to open output file \"%s\"\n", outputFile);
-		return 1;
-	}
-
-	fprintf(output, "%%MatrixMarket matrix coordinate pattern symmetric\n");
-	fprintf(output, "%llu %llu %llu\n", maxID, maxID, edgeCount);
-	while(getline(&line, &len, input) != -1) {
-		if(line[0] == '#' || line [0] == '%') {
-			printf("Encountered a commented line\n");
-		} else {
-			if(sscanf(line, "%" SCNu64 " %" SCNu64, &v0, &v1) == 2) {
-				fprintf(output, "%" SCNu64 " %" SCNu64 "\n", v0, v1);
-			} else {
-				printf("Invalid line: \"%s\"\n", line);
-			}
-		}
-	}
-
-	if(line) {
-		//free(line);
-	}
-	fclose(input);
-	fclose(output);
 
 	return 0;
 }
 
-static int parse_opt(int key, char *arg, struct argp_state *state) {
-	if(key == 'i') {
-		inputFile = arg;
-	} else if(key == 'o') {
-		outputFile = arg;
+/* Reads fd as weighted edgelist, puts each line
+ * in asserted format "FROM TO WEIGHT" to corresponding arrays.
+ *
+ * Assertions:
+ * - arrays are of sufficient size
+ * - each non-commentary line can be correctly parsed by sscanf
+ */
+void readweighted(FILE* fd, unsigned long long *fromp, unsigned long long *top, double *weightp) {
+	char* line = NULL;
+	size_t len = 0;
+	while(getline(&line, &len, fd) != -1) {
+		if(line[0] == '#' || line [0] == '%') {
+			continue;
+		} else {
+			/* if this assertion fails, something very wrong happened after format was
+			 * inferred and verified */
+			assert(sscanf(line, "%llu %llu %lf\n", fromp, top, weightp) == 3);
+			++fromp;
+			++top;
+			++weightp;
+		}
 	}
-	
+
+	free(line);
+}
+
+
+/* Reads fd as unweighted edgelist, puts each line
+ * in asserted format "FROM TO" to corresponding arrays.
+ *
+ * Assertions:
+ * - arrays are of sufficient size
+ * - each non-commentary line can be correctly parsed by sscanf
+ */
+void readunweighted(FILE* fd, unsigned long long *fromp, unsigned long long *top) {
+	char* line = NULL;
+	size_t len = 0;
+	while(getline(&line, &len, fd) != -1) {
+		if(line[0] == '#' || line [0] == '%') {
+			continue;
+		} else {
+			/* if this assertion fails, something very wrong happened after format was
+			 * inferred and verified */
+			assert(sscanf(line, "%llu %llu\n", fromp, top) == 2);
+			++fromp;
+			++top;
+		}
+	}
+
+	free(line);
+}
+
+void wtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top, double *weightp) {
+	for(unsigned long long i = 0; i < numlines; ++i) {
+		fprintf(fd, "%llu %llu %lf\n", fromp, top, weightp);
+		++fromp;
+		++top;
+		++weightp;
+	}
+}
+
+void unwtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top) {
+	for(unsigned long long i = 0; i < numlines; ++i) {
+		fprintf(fd, "%llu %llu 1.0\n", fromp, top);
+		++fromp;
+		++top;
+	}
+}
+
+void unwtounwmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top) {
+	for(unsigned long long i = 0; i < numlines; ++i) {
+		fprintf(fd, "%llu %llu\n", fromp, top);
+		++fromp;
+		++top;
+	}
+}
+
+void writeheader(FILE* fd, char weighted, char undirected) {
+	fprintf(fd, "%%MatrixMarket matrix coordinate");
+
+	if(weighted) {
+		fprintf(fd, " real");
+	} else {
+		fprintf(fd, " pattern");
+	}
+
+	if(undirected) {
+		fprintf(fd, " symmetric\n");
+	} else {
+		fprintf(fd, "general\n");
+	}
+}
+
+
+int main(int argc, char **argv) {
+
+	ARGBEGIN {
+	case 's':
+		strictcheck = 1;
+		break;
+	case 'u':
+		forceundir = 0;
+		break;
+	case 'w':
+		forceweight = 1;
+		break;
+	default:
+		fprintf(stderr, "Unrecognized option: \"%c\"\n", ARGC());
+		printusage();
+		return 1;
+	} ARGEND
+
+	if(argc != 2) {
+		fprintf(stderr, "Incorrect number of arguments: %d\n", argc);
+		printusage();
+		return 1;
+	}
+
+	inname = argv[0];
+	outname = argv[1];
+
+	FILE *fd = fopen(inname, "r");
+	if(fd == NULL) {
+		fprintf(stderr, "Unable to open input file \"%s\"\n", inname);
+		return 1;
+	}
+
+	unsigned long long maxid = 0, edgecnt = 0, linecnt = 0;
+	char weighted;
+	char r = inferformat(fd, strictcheck, &weighted, &edgecnt, &linecnt, &maxid);
+	if(r != 0) {
+		fprintf(stderr, "Unable to infer input file format, terminating\n");
+		return 1;
+	}
+
+	printf("Lines: %llu\nMaximal vertex id: %llu\nEdges: %llu\n");
+
+	unsigned long long *fromp, *top;
+	double *weightp = NULL;
+	fromp = (unsigned long long *) malloc(linecnt * sizeof(unsigned long long));
+	top = (unsigned long long *) malloc(linecnt * sizeof(unsigned long long));
+
+	rewind(fd);
+	if(weighted) {
+		weightp = (double *) malloc(linecnt * sizeof(double));
+		readweighted(fd, fromp, top, weightp);
+	} else {
+		readunweighted(fd, fromp, top);
+	}
+
+	fclose(fd);
+
+	fd = fopen(outname, "w");
+	if(fd == NULL) {
+		printf("Unable to open output file \"%s\"\n", outname);
+		return 1;
+	}
+
+	writeheader(fd, weighted || forceweight, forceundir);
+	if(weighted) {
+		wtowmtx(fd, linecnt, fromp, top, weightp);
+	} else if(forceweight) {
+		unwtowmtx(fd, linecnt, fromp, top);
+	} else {
+		unwtounwmtx(fd, linecnt, fromp, top);
+	}
+
+	fclose(fd);
+	free(fromp);
+	free(top);
+	if(weightp != NULL) {
+		free(weightp);
+	}
+
 	return 0;
 }
 

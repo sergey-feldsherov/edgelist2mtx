@@ -2,7 +2,7 @@ CFLAGS := -W -Wall \
 	  -Wunused \
 	  -Werror \
 	  -Wcast-align \
-	  -pedantic -pedantic-errors \
+	  -pedantic-errors \
 	  -fstack-protector-all \
 	  -Wwrite-strings \
 	  -Wcast-align \
@@ -10,21 +10,22 @@ CFLAGS := -W -Wall \
 	  -std=gnu99 \
 	  -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations \
 	  -Wold-style-definition \
-	  -Wdeclaration-after-statement \
 	  -Wbad-function-cast \
 	  -Wnested-externs \
 	  -Wfloat-equal \
 	  -Wpointer-arith \
+#	  -Wdeclaration-after-statement \
+#	  -pedantic \
 
 CC = gcc $(CFLAGS)
 
 
 bins := edgelist2mtx edgelist2mtx-debug
 
-all: edglist2mtx
+all: edgelist2mtx
 
 
-edglist2mtx: src/edgelist2mtx.c
+edgelist2mtx: src/edgelist2mtx.c
 	$(CC) -O3 -o $@ $<
 
 edgelist2mtx-debug: src/edgelist2mtx.c
