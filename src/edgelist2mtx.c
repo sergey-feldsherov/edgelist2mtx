@@ -53,17 +53,18 @@ char inferformat(FILE* fd, char strict, char *weightedp, unsigned long long *edg
 		}
 	}
 
-	if(sscanf(line, "%llu %llu %lf\n", &u, &v, &w) != 3) {
-		if(sscanf(line, "%llu %llu\n", &u, &v) != 2) {
+	if(sscanf(line, "%llu %llu %lf\n", &u, &v, &w) == 3) {
+		printf("Inferring weighted format from line %llu\n", *linecntp);
+		*weightedp = 1;
+
+	} else {
+		if(sscanf(line, "%llu %llu\n", &u, &v) == 2) {
+			printf("Inferring unweighted format from line %llu\n", *linecntp);
+			*weightedp = 0;
+		} else {
 			fprintf(stderr, "Line %llu could not be parsed\n", *linecntp);
 			return 1;
-		} else {
-			printf("Inferring weighted format from line %llu\n", *linecntp);
-			*weightedp = 1;
 		}
-	} else {
-		printf("Inferring unweighted format from line %llu\n", *linecntp);
-		*weightedp = 0;
 	}
 
 	unsigned long long infline = *linecntp;
@@ -183,7 +184,7 @@ void unwtounwmtx(FILE* fd, unsigned long long numlines, unsigned long long *from
 }
 
 void writeheader(FILE* fd, char weighted, char undirected) {
-	fprintf(fd, "%%MatrixMarket matrix coordinate");
+	fprintf(fd, "%%%%MatrixMarket matrix coordinate");
 
 	if(weighted) {
 		fprintf(fd, " real");
@@ -194,7 +195,7 @@ void writeheader(FILE* fd, char weighted, char undirected) {
 	if(undirected) {
 		fprintf(fd, " symmetric\n");
 	} else {
-		fprintf(fd, "general\n");
+		fprintf(fd, " general\n");
 	}
 }
 
@@ -240,7 +241,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	printf("Input file parsed\n\tLines: %llu\n\tMaximal vertex id: %llu\n\tEdges: %llu\n", linecnt, maxid, edgecnt);
+	printf("Input file parsed\nLines: %llu\nMaximal vertex id: %llu\nEdges: %llu\n", linecnt, maxid, edgecnt);
 
 	unsigned long long *fromp, *top;
 	double *weightp = NULL;
@@ -264,6 +265,7 @@ int main(int argc, char **argv) {
 	}
 
 	writeheader(fd, weighted || forceweight, forceundir);
+	fprintf(fd, "%llu %llu %llu\n", maxid, maxid, edgecnt);
 	if(weighted) {
 		wtowmtx(fd, linecnt, fromp, top, weightp);
 	} else if(forceweight) {
