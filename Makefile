@@ -24,6 +24,8 @@ bins := edgelist2mtx edgelist2mtx-debug
 
 all: edgelist2mtx
 
+debug: edgelist2mtx-debug
+
 
 edgelist2mtx: src/edgelist2mtx.c
 	$(CC) -O3 -o $@ $<
