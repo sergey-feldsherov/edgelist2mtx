@@ -1,4 +1,5 @@
 CFLAGS := -W -Wall \
+	  -Wformat=2 \
 	  -Wunused \
 	  -Werror \
 	  -Wcast-align \

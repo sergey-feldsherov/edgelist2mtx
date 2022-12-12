@@ -160,7 +160,7 @@ void readunweighted(FILE* fd, unsigned long long *fromp, unsigned long long *top
 
 void wtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top, double *weightp) {
 	for(unsigned long long i = 0; i < numlines; ++i) {
-		fprintf(fd, "%llu %llu %lf\n", fromp, top, weightp);
+		fprintf(fd, "%llu %llu %lf\n", *fromp, *top, *weightp);
 		++fromp;
 		++top;
 		++weightp;
@@ -169,7 +169,7 @@ void wtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, u
 
 void unwtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top) {
 	for(unsigned long long i = 0; i < numlines; ++i) {
-		fprintf(fd, "%llu %llu 1.0\n", fromp, top);
+		fprintf(fd, "%llu %llu 1.0\n", *fromp, *top);
 		++fromp;
 		++top;
 	}
@@ -177,7 +177,7 @@ void unwtowmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp,
 
 void unwtounwmtx(FILE* fd, unsigned long long numlines, unsigned long long *fromp, unsigned long long *top) {
 	for(unsigned long long i = 0; i < numlines; ++i) {
-		fprintf(fd, "%llu %llu\n", fromp, top);
+		fprintf(fd, "%llu %llu\n", *fromp, *top);
 		++fromp;
 		++top;
 	}
